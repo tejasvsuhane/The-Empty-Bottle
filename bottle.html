@@ -1,0 +1,985 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>EcoCraft - Upcycle Bottle Waste</title>
+  
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Lucide Icons CDN -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <!-- Google Fonts: Inter & Space Grotesk -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+            display: ['Space Grotesk', 'sans-serif'],
+          },
+          colors: {
+            brand: {
+              black: '#030704',
+              surface: '#08120b',
+              card: '#0e1d13',
+              border: '#163320',
+              primary: '#10b981',
+              hover: '#059669',
+              darkgreen: '#064e3b',
+              neon: '#34d399',
+            }
+          },
+          animation: {
+            'orb-1': 'floatOrb1 14s ease-in-out infinite alternate',
+            'orb-2': 'floatOrb2 18s ease-in-out infinite alternate',
+            'pulse-slow': 'pulseGlow 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+          },
+          keyframes: {
+            floatOrb1: {
+              '0%': { transform: 'translate(0px, 0px) scale(1)' },
+              '100%': { transform: 'translate(80px, 60px) scale(1.15)' },
+            },
+            floatOrb2: {
+              '0%': { transform: 'translate(0px, 0px) scale(1)' },
+              '100%': { transform: 'translate(-60px, 80px) scale(1.2)' },
+            },
+            pulseGlow: {
+              '0%, 100%': { opacity: 0.6, boxShadow: '0 0 15px rgba(16, 185, 129, 0.2)' },
+              '50%': { opacity: 1, boxShadow: '0 0 30px rgba(16, 185, 129, 0.5)' },
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    body {
+      background-color: #030704;
+      color: #ecfdf5;
+      overflow-x: hidden;
+    }
+    
+    /* Background Canvas for Particles */
+    #bg-canvas {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 1;
+    }
+
+    #confetti-canvas {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 100;
+    }
+
+    /* Glassmorphism Card Style with Spotlight */
+    .glass-card {
+      background: rgba(14, 29, 19, 0.7);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid rgba(22, 51, 32, 0.8);
+      position: relative;
+      transition: transform 0.2s ease-out, border-color 0.3s ease, box-shadow 0.3s ease;
+    }
+
+    .glass-card::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      border-radius: inherit;
+      background: radial-gradient(800px circle at var(--mouse-x, 50%) var(--mouse-y, 50%), rgba(16, 185, 129, 0.15), transparent 40%);
+      opacity: 0;
+      transition: opacity 0.3s ease;
+      pointer-events: none;
+    }
+
+    .glass-card:hover::before {
+      opacity: 1;
+    }
+
+    .glass-card:hover {
+      border-color: rgba(16, 185, 129, 0.5);
+      box-shadow: 0 10px 30px -10px rgba(16, 185, 129, 0.2);
+    }
+
+    /* 3D Perspective Parent */
+    .perspective-container {
+      perspective: 1000px;
+    }
+
+    .fade-transition {
+      transition: opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1), transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .fade-out {
+      opacity: 0;
+      transform: translateY(12px) scale(0.98);
+      pointer-events: none;
+    }
+
+    .fade-in {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+
+    /* Custom Scrollbar */
+    ::-webkit-scrollbar {
+      width: 8px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #030704;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #0e1d13;
+      border-radius: 4px;
+      border: 1px solid #163320;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #10b981;
+    }
+  </style>
+</head>
+<body class="font-sans antialiased min-h-screen flex flex-col selection:bg-emerald-500 selection:text-black relative">
+
+  <!-- Interactive Background Canvas for Bubbles -->
+  <canvas id="bg-canvas"></canvas>
+  <canvas id="confetti-canvas"></canvas>
+
+  <!-- Ambient Glowing Orbs -->
+  <div class="fixed top-[-100px] left-[-100px] w-96 h-96 bg-emerald-900/30 rounded-full blur-[120px] pointer-events-none animate-orb-1 z-0"></div>
+  <div class="fixed bottom-[-100px] right-[-100px] w-96 h-96 bg-green-950/40 rounded-full blur-[140px] pointer-events-none animate-orb-2 z-0"></div>
+
+  <!-- Main Content Wrapper -->
+  <div class="relative z-10 flex-grow flex flex-col">
+
+    <!-- Header Navigation -->
+    <header class="border-b border-brand-border/60 bg-brand-surface/80 backdrop-blur-md sticky top-0 z-50">
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
+        
+        <a href="#" onclick="resetToCatalog(event)" class="flex items-center space-x-3 group">
+          <div class="p-2.5 rounded-xl bg-brand-darkgreen/60 border border-emerald-500/30 text-emerald-400 group-hover:scale-105 group-hover:border-emerald-400 transition-all duration-300 shadow-[0_0_15px_rgba(16,185,129,0.2)]">
+            <i data-lucide="recycle" class="w-6 h-6 animate-spin-slow"></i>
+          </div>
+          <div>
+            <span class="font-display font-bold text-xl tracking-wide text-white group-hover:text-emerald-400 transition-colors">EcoCraft</span>
+            <span class="block text-xs text-emerald-500/80 font-mono tracking-widest uppercase">Upcycling Hub</span>
+          </div>
+        </a>
+
+        <!-- Impact Badge -->
+        <div class="hidden sm:flex items-center space-x-2 px-3.5 py-1.5 rounded-full bg-emerald-950/60 border border-emerald-800/50 text-emerald-300 text-xs font-medium">
+          <i data-lucide="sparkles" class="w-4 h-4 text-emerald-400 animate-pulse"></i>
+          <span>Zero Waste Initiative</span>
+        </div>
+
+      </div>
+    </header>
+
+    <!-- Main Container -->
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 flex-grow w-full">
+
+      <!-- ========================================== -->
+      <!-- SECTION 1: CATALOG VIEW (SELECT A PROJECT) -->
+      <!-- ========================================== -->
+      <section id="catalog-section" class="fade-transition fade-in space-y-10">
+        
+        <!-- Hero Section -->
+        <div class="text-center max-w-3xl mx-auto space-y-4 pt-4">
+          <div class="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-emerald-900/40 border border-emerald-500/30 text-emerald-300 text-xs font-semibold uppercase tracking-wider">
+            <i data-lucide="leaf" class="w-3.5 h-3.5 text-emerald-400"></i>
+            <span>Transform Bottle Waste</span>
+          </div>
+          <h1 class="font-display text-4xl sm:text-5xl font-bold tracking-tight text-white leading-tight">
+            Turn Discarded Bottles into <span class="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 via-teal-300 to-green-500">Useful Creations</span>
+          </h1>
+          <p class="text-slate-400 text-base sm:text-lg max-w-2xl mx-auto">
+            Choose what you want to create below. We will guide you with interactive step-by-step instructions, material lists, and safety precautions!
+          </p>
+        </div>
+
+        <!-- Filter Controls -->
+        <div class="flex flex-wrap items-center justify-center gap-2 sm:gap-3">
+          <button onclick="filterProjects('all')" class="filter-btn active-filter px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200 border border-emerald-500/50 bg-emerald-950 text-emerald-300 shadow-[0_0_12px_rgba(16,185,129,0.2)]">
+            All Projects
+          </button>
+          <button onclick="filterProjects('plastic')" class="filter-btn px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200 border border-brand-border bg-brand-surface text-slate-400 hover:text-white hover:border-emerald-500/40">
+            Plastic Bottles
+          </button>
+          <button onclick="filterProjects('glass')" class="filter-btn px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200 border border-brand-border bg-brand-surface text-slate-400 hover:text-white hover:border-emerald-500/40">
+            Glass Bottles
+          </button>
+          <button onclick="filterProjects('caps')" class="filter-btn px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200 border border-brand-border bg-brand-surface text-slate-400 hover:text-white hover:border-emerald-500/40">
+            Bottle Caps
+          </button>
+        </div>
+
+        <!-- Project Cards Grid -->
+        <div id="project-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 perspective-container">
+          <!-- Cards dynamically injected via JS -->
+        </div>
+
+      </section>
+
+      <!-- ========================================== -->
+      <!-- SECTION 2: INTERACTIVE STEP-BY-STEP WORKFLOW-->
+      <!-- ========================================== -->
+      <section id="guide-section" class="hidden fade-transition fade-out max-w-4xl mx-auto space-y-8">
+        
+        <!-- Top Navigation / Back Button -->
+        <div class="flex items-center justify-between border-b border-brand-border/60 pb-5">
+          <button onclick="resetToCatalog(event)" class="inline-flex items-center space-x-2 text-sm font-medium text-slate-400 hover:text-emerald-400 transition-colors group">
+            <i data-lucide="arrow-left" class="w-4 h-4 group-hover:-translate-x-1 transition-transform"></i>
+            <span>Back to Projects</span>
+          </button>
+          
+          <div class="flex items-center space-x-2">
+            <span class="text-xs text-slate-400 uppercase tracking-widest font-mono">Difficulty:</span>
+            <span id="guide-difficulty" class="text-xs px-2.5 py-1 rounded-full font-semibold"></span>
+          </div>
+        </div>
+
+        <!-- Active Project Header -->
+        <div class="glass-card rounded-2xl p-6 sm:p-8 space-y-4 border border-brand-border">
+          <div class="flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <span id="guide-category" class="text-xs font-mono uppercase tracking-widest text-emerald-400 font-semibold"></span>
+              <h2 id="guide-title" class="font-display text-2xl sm:text-3xl font-bold text-white mt-1"></h2>
+            </div>
+            <div id="guide-icon-container" class="p-3.5 rounded-2xl bg-brand-darkgreen/50 border border-emerald-500/30 text-emerald-400">
+            </div>
+          </div>
+          <p id="guide-description" class="text-slate-300 text-sm sm:text-base leading-relaxed"></p>
+        </div>
+
+        <!-- Safety & Material Checklist Section -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+          
+          <!-- Safety Precautions -->
+          <div class="glass-card rounded-2xl p-6 border border-amber-900/40 bg-amber-950/10 space-y-3">
+            <div class="flex items-center space-x-2.5 text-amber-400 font-display font-semibold">
+              <i data-lucide="shield-alert" class="w-5 h-5"></i>
+              <h3>Safety Guidelines</h3>
+            </div>
+            <ul id="guide-safety" class="space-y-2 text-xs sm:text-sm text-slate-300">
+              <!-- Safety tips injected here -->
+            </ul>
+          </div>
+
+          <!-- Required Materials Checklist -->
+          <div class="glass-card rounded-2xl p-6 border border-brand-border space-y-3">
+            <div class="flex items-center space-x-2.5 text-emerald-400 font-display font-semibold">
+              <i data-lucide="wrench" class="w-5 h-5"></i>
+              <h3>Materials Needed</h3>
+            </div>
+            <div id="guide-materials" class="space-y-2 text-xs sm:text-sm text-slate-300">
+              <!-- Materials injected here -->
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Step-by-Step Interactive Guide Box -->
+        <div class="glass-card rounded-2xl p-6 sm:p-8 space-y-6 border border-emerald-500/30 shadow-[0_0_25px_rgba(16,185,129,0.1)] relative">
+          
+          <!-- Progress Header -->
+          <div class="space-y-2">
+            <div class="flex items-center justify-between text-xs sm:text-sm font-semibold font-mono">
+              <span class="text-emerald-400" id="step-counter-text">STEP 1 OF 4</span>
+              <span class="text-slate-400" id="step-progress-percent">0% COMPLETED</span>
+            </div>
+            
+            <!-- Progress Bar -->
+            <div class="w-full h-2.5 bg-brand-surface rounded-full overflow-hidden border border-brand-border">
+              <div id="progress-bar-fill" class="h-full bg-gradient-to-r from-emerald-600 to-teal-400 transition-all duration-500 w-0"></div>
+            </div>
+          </div>
+
+          <!-- Active Step Display Card -->
+          <div id="active-step-card" class="min-h-[160px] p-6 rounded-xl bg-brand-surface/90 border border-brand-border space-y-3 transition-all duration-300">
+            <div class="flex items-center space-x-3">
+              <span id="active-step-number" class="w-7 h-7 rounded-full bg-emerald-500/20 text-emerald-400 font-bold text-xs flex items-center justify-center border border-emerald-500/40">1</span>
+              <h4 id="active-step-title" class="font-display font-bold text-lg text-white"></h4>
+            </div>
+            <p id="active-step-instruction" class="text-slate-300 text-sm leading-relaxed pl-10"></p>
+          </div>
+
+          <!-- Wizard Navigation Controls -->
+          <div class="flex items-center justify-between pt-2">
+            <button id="prev-step-btn" onclick="navigateStep(-1)" class="px-5 py-2.5 rounded-xl border border-brand-border bg-brand-surface text-slate-400 hover:text-white hover:border-emerald-500/40 text-sm font-semibold transition-all disabled:opacity-40 disabled:pointer-events-none flex items-center space-x-2">
+              <i data-lucide="chevron-left" class="w-4 h-4"></i>
+              <span>Previous</span>
+            </button>
+
+            <button id="next-step-btn" onclick="navigateStep(1)" class="px-6 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black font-semibold text-sm transition-all shadow-[0_0_15px_rgba(16,185,129,0.3)] flex items-center space-x-2">
+              <span id="next-btn-text">Next Step</span>
+              <i id="next-btn-icon" data-lucide="chevron-right" class="w-4 h-4"></i>
+            </button>
+          </div>
+
+        </div>
+
+        <!-- Project Completion Celebration Overlay (Hidden by Default) -->
+        <div id="completion-banner" class="hidden glass-card rounded-2xl p-8 text-center space-y-4 border border-emerald-400/50 bg-emerald-950/30 animate-pulse-slow">
+          <div class="w-16 h-16 rounded-full bg-emerald-500/20 border border-emerald-400 text-emerald-400 flex items-center justify-center mx-auto shadow-[0_0_20px_rgba(16,185,129,0.4)]">
+            <i data-lucide="trophy" class="w-8 h-8"></i>
+          </div>
+          <h3 class="font-display text-2xl font-bold text-white">You're All Done!</h3>
+          <p class="text-slate-300 text-sm max-w-md mx-auto">
+            Awesome work! You have successfully repurposed waste material into a brand new functional item.
+          </p>
+          <div class="pt-2">
+            <button onclick="resetToCatalog(event)" class="px-6 py-3 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black font-bold text-sm transition-all shadow-[0_0_20px_rgba(16,185,129,0.3)]">
+              Build Another Project
+            </button>
+          </div>
+        </div>
+
+      </section>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="border-t border-brand-border/60 bg-brand-surface/80 py-6 mt-12">
+      <div class="max-w-7xl mx-auto px-4 text-center text-xs text-slate-500">
+        <p>EcoCraft • Upcycling Bottle Waste Interactive Guide</p>
+      </div>
+    </footer>
+
+  </div>
+
+  <!-- JavaScript App Logic -->
+  <script>
+    // ==========================================
+    // DATASET: DIY UPCYCLING PROJECTS
+    // ==========================================
+    const projectsData = [
+      {
+        id: 'self-watering-planter',
+        title: 'Self-Watering Planter',
+        category: 'plastic',
+        categoryLabel: 'Plastic Bottle',
+        difficulty: 'Easy',
+        difficultyColor: 'bg-emerald-950 text-emerald-400 border-emerald-800',
+        icon: 'sprout',
+        shortDesc: 'Convert a standard PET soda bottle into a smart sub-irrigated planter ideal for indoor herb gardens.',
+        safety: [
+          'Use precision safety scissors or a utility knife with care.',
+          'Sand down sharp cut plastic edges before planting.'
+        ],
+        materials: [
+          '1 Plastic Soda Bottle (1.5L or 2L)',
+          'Cotton Yarn / Wick String (8-10 inches)',
+          'Potting Soil & Herb Seeds/Plant',
+          'Utility Knife or Scissors'
+        ],
+        steps: [
+          {
+            title: 'Cut the Plastic Bottle',
+            instruction: 'Carefully slice the plastic bottle into two halves about 4 inches below the bottle cap neck.'
+          },
+          {
+            title: 'Prepare the Cap & Wick',
+            instruction: 'Drill or poke a 1/4-inch hole through the center of the plastic bottle cap. Thread the cotton yarn through, leaving 4 inches on both sides.'
+          },
+          {
+            title: 'Assemble the Reservoir',
+            instruction: 'Screw the cap back on. Invert the top neck half inside the bottom base half like a funnel so the yarn hangs down into the bottom.'
+          },
+          {
+            title: 'Plant and Water',
+            instruction: 'Fill the top funnel with moist potting soil. Fill the bottom base with fresh water. The cotton string will automatically wick moisture upward!'
+          }
+        ]
+      },
+      {
+        id: 'cut-glass-candleholder',
+        title: 'Glass Bottle Candleholder',
+        category: 'glass',
+        categoryLabel: 'Glass Bottle',
+        difficulty: 'Medium',
+        difficultyColor: 'bg-amber-950 text-amber-400 border-amber-800',
+        icon: 'flame',
+        shortDesc: 'Redesign glass wine or beer bottles into elegant pillar candle holders and ambient table lanterns.',
+        safety: [
+          'Wear protective safety glasses and work gloves when cutting glass.',
+          'Always submerge glass into cold water slowly during thermal shock.'
+        ],
+        materials: [
+          '1 Empty Glass Wine/Soda Bottle',
+          'Glass Bottle Cutter or String + Acetone',
+          'Ice Water Bath & Boiling Water',
+          'Fine Sandpaper (220+ grit)'
+        ],
+        steps: [
+          {
+            title: 'Score the Glass',
+            instruction: 'Use a bottle cutter to score a clean, continuous line around the bottle circumference near the top or middle.'
+          },
+          {
+            title: 'Thermal Shock Separation',
+            instruction: 'Alternately pour boiling water and ice water over the scored line until the glass cleanly snaps along the line.'
+          },
+          {
+            title: 'Smooth the Edges',
+            instruction: 'Sand the sharp glass edge under running water with fine sandpaper until completely smooth to the touch.'
+          },
+          {
+            title: 'Insert Candle',
+            instruction: 'Place a taper or pillar candle inside the base, or place the bottomless glass dome over a tea light candle.'
+          }
+        ]
+      },
+      {
+        id: 'bottle-cap-coasters',
+        title: 'Upcycled Cap Coaster',
+        category: 'caps',
+        categoryLabel: 'Bottle Caps',
+        difficulty: 'Easy',
+        difficultyColor: 'bg-emerald-950 text-emerald-400 border-emerald-800',
+        icon: 'disc',
+        shortDesc: 'Arrange and fuse plastic or metal bottle caps into colorful, heat-resistant drink coasters.',
+        safety: [
+          'Work in a well-ventilated area if using hot glue or heat application.',
+          'Be careful of hot metal edges if heating caps.'
+        ],
+        materials: [
+          '15-20 Bottle Caps (Matching thickness)',
+          'Hot Glue Gun or Epoxy Resin',
+          'Cork Pad / Felt backing',
+          'Scissors'
+        ],
+        steps: [
+          {
+            title: 'Sort & Clean Caps',
+            instruction: 'Wash bottle caps thoroughly with soap and water to remove sugary residues. Dry completely.'
+          },
+          {
+            title: 'Arrange the Mosaic Pattern',
+            instruction: 'Lay caps out on a table in a hexagonal or circular pattern until satisfied with the layout.'
+          },
+          {
+            title: 'Bond the Caps',
+            instruction: 'Apply generous hot glue or strong adhesive between the touching side edges of the caps to lock them together.'
+          },
+          {
+            title: 'Attach Backing',
+            instruction: 'Cut a circle of cork sheet or felt and glue it onto the bottom surface for tabletop protection.'
+          }
+        ]
+      },
+      {
+        id: 'vertical-bird-feeder',
+        title: 'Hanging Bird Feeder',
+        category: 'plastic',
+        categoryLabel: 'Plastic Bottle',
+        difficulty: 'Easy',
+        difficultyColor: 'bg-emerald-950 text-emerald-400 border-emerald-800',
+        icon: 'bird',
+        shortDesc: 'Build a garden bird dispenser with wooden spoons as perches and automatic seed trays.',
+        safety: [
+          'Keep knife blades pointed away from hands when poking perch holes.'
+        ],
+        materials: [
+          '1 Plastic Water Bottle (1L or larger)',
+          '2 Wooden Spoons or Dowels',
+          'Metal Eye-Screw hook',
+          'Wild Bird Seed'
+        ],
+        steps: [
+          {
+            title: 'Poke Perch Holes',
+            instruction: 'Cut two small opposing holes through the plastic bottle to insert a wooden spoon straight across. Make the bowl end sit slightly lower.'
+          },
+          {
+            title: 'Enlarge Seed Dispenser Holes',
+            instruction: 'Widen the hole right above the spoon bowl slightly so birdseed spills out automatically onto the spoon.'
+          },
+          {
+            title: 'Install Hanging Screw',
+            instruction: 'Twist a metal eye-screw through the center of the plastic bottle cap for hanging.'
+          },
+          {
+            title: 'Fill & Hang',
+            instruction: 'Fill the bottle with birdseed, screw the cap tightly, and hang it outdoors on a tree branch!'
+          }
+        ]
+      },
+      {
+        id: 'glass-hanging-pendant',
+        title: 'Glass Pendant Lamp',
+        category: 'glass',
+        categoryLabel: 'Glass Bottle',
+        difficulty: 'Advanced',
+        difficultyColor: 'bg-rose-950 text-rose-400 border-rose-800',
+        icon: 'lightbulb',
+        shortDesc: 'Craft a stunning modern hanging light fixture from cut glass bottles and light kits.',
+        safety: [
+          'Disconnect electrical power before wiring any lamp components.',
+          'Wear eye protection while cutting and sanding glass.'
+        ],
+        materials: [
+          '1 Dark Glass Wine Bottle',
+          'Pendant Light Cord Kit with E26 socket',
+          'LED Filament Light Bulb',
+          'Glass Scoring Tool'
+        ],
+        steps: [
+          {
+            title: 'Cut Off Bottle Bottom',
+            instruction: 'Score and separate the bottom 1-2 inches off the glass bottle using the thermal shock method.'
+          },
+          {
+            title: 'Smooth & Polish Edge',
+            instruction: 'Thoroughly sand the newly cut bottom glass rim with wet silicon carbide sandpaper until round and smooth.'
+          },
+          {
+            title: 'Thread Light Kit',
+            instruction: 'Feed the lamp cord through the top neck opening of the bottle down into the main body.'
+          },
+          {
+            title: 'Install Socket & Bulb',
+            instruction: 'Attach the light socket housing from inside the bottle base and screw in a warm LED filament bulb.'
+          }
+        ]
+      },
+      {
+        id: 'desk-organizer-caddy',
+        title: 'Desk Supply Organizer',
+        category: 'plastic',
+        categoryLabel: 'Plastic Bottle',
+        difficulty: 'Easy',
+        difficultyColor: 'bg-emerald-950 text-emerald-400 border-emerald-800',
+        icon: 'layout-grid',
+        shortDesc: 'Transform multiple plastic bottle bases into a sleek modular desktop organizer for pens and tools.',
+        safety: [
+          'Smooth sharp plastic edges using a warm iron pressed against the cut edge.'
+        ],
+        materials: [
+          '3-4 Plastic Bottles (Various sizes)',
+          'Utility Knife',
+          'Iron (For smoothing edges)',
+          'Cardboard base or tray'
+        ],
+        steps: [
+          {
+            title: 'Cut Bottle Bases',
+            instruction: 'Cut off the bottom section of 3 or 4 plastic bottles at different heights (3 to 5 inches).'
+          },
+          {
+            title: 'Smooth Edges with Iron',
+            instruction: 'Briefly press the open cut edges against a warm clothes iron for 3 seconds to curl and round the sharp plastic edges.'
+          },
+          {
+            title: 'Group & Attach',
+            instruction: 'Glue the containers side-by-side onto a small wooden or cardboard base.'
+          },
+          {
+            title: 'Organize Workspace',
+            instruction: 'Fill each section with pens, scissors, paintbrushes, or cables!'
+          }
+        ]
+      }
+    ];
+
+    // ==========================================
+    // STATE MANAGEMENT
+    // ==========================================
+    let activeFilter = 'all';
+    let currentProject = null;
+    let currentStepIndex = 0;
+
+    // ==========================================
+    // INITIALIZATION & RENDER
+    // ==========================================
+    document.addEventListener('DOMContentLoaded', () => {
+      renderProjectsGrid();
+      initLucide();
+      initBackgroundCanvas();
+      setupCardInteractions();
+    });
+
+    function initLucide() {
+      if (window.lucide) {
+        lucide.createIcons();
+      }
+    }
+
+    // Render Project Cards in Catalog
+    function renderProjectsGrid() {
+      const grid = document.getElementById('project-grid');
+      grid.innerHTML = '';
+
+      const filtered = activeFilter === 'all' 
+        ? projectsData 
+        : projectsData.filter(p => p.category === activeFilter);
+
+      filtered.forEach((project) => {
+        const card = document.createElement('div');
+        card.className = 'glass-card rounded-2xl p-6 flex flex-col justify-between space-y-5 cursor-pointer group';
+        card.setAttribute('onclick', `selectProject('${project.id}')`);
+
+        card.innerHTML = `
+          <div class="space-y-3">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-mono uppercase tracking-widest text-emerald-400 font-medium">${project.categoryLabel}</span>
+              <span class="text-xs px-2.5 py-0.5 rounded-full font-semibold border ${project.difficultyColor}">${project.difficulty}</span>
+            </div>
+            
+            <div class="flex items-center space-x-3 pt-1">
+              <div class="p-2.5 rounded-xl bg-brand-surface border border-brand-border text-emerald-400 group-hover:border-emerald-400 group-hover:scale-110 transition-all duration-300">
+                <i data-lucide="${project.icon}" class="w-5 h-5"></i>
+              </div>
+              <h3 class="font-display text-xl font-bold text-white group-hover:text-emerald-400 transition-colors">${project.title}</h3>
+            </div>
+
+            <p class="text-slate-400 text-xs sm:text-sm leading-relaxed">${project.shortDesc}</p>
+          </div>
+
+          <div class="pt-2 flex items-center justify-between border-t border-brand-border/60 text-xs font-semibold text-emerald-400">
+            <span class="inline-flex items-center space-x-1 group-hover:translate-x-1 transition-transform">
+              <span>Start Building Guide</span>
+              <i data-lucide="arrow-right" class="w-3.5 h-3.5"></i>
+            </span>
+            <span class="text-slate-500 font-mono">${project.steps.length} Steps</span>
+          </div>
+        `;
+
+        grid.appendChild(card);
+      });
+
+      initLucide();
+    }
+
+    // Filter Buttons
+    function filterProjects(category) {
+      activeFilter = category;
+      document.querySelectorAll('.filter-btn').forEach(btn => {
+        btn.classList.remove('active-filter', 'bg-emerald-950', 'text-emerald-300', 'border-emerald-500/50', 'shadow-[0_0_12px_rgba(16,185,129,0.2)]');
+        btn.classList.add('bg-brand-surface', 'text-slate-400', 'border-brand-border');
+      });
+
+      event.target.classList.add('active-filter', 'bg-emerald-950', 'text-emerald-300', 'border-emerald-500/50', 'shadow-[0_0_12px_rgba(16,185,129,0.2)]');
+      event.target.classList.remove('bg-brand-surface', 'text-slate-400', 'border-brand-border');
+
+      renderProjectsGrid();
+    }
+
+    // Select Project -> Show Step-by-Step Guide View
+    function selectProject(projectId) {
+      currentProject = projectsData.find(p => p.id === projectId);
+      if (!currentProject) return;
+
+      currentStepIndex = 0;
+
+      // Populate Data in Guide View
+      document.getElementById('guide-category').innerText = currentProject.categoryLabel;
+      document.getElementById('guide-title').innerText = currentProject.title;
+      document.getElementById('guide-description').innerText = currentProject.shortDesc;
+      
+      const difficultyBadge = document.getElementById('guide-difficulty');
+      difficultyBadge.innerText = currentProject.difficulty;
+      difficultyBadge.className = `text-xs px-2.5 py-1 rounded-full font-semibold border ${currentProject.difficultyColor}`;
+
+      // Icon Container
+      const iconContainer = document.getElementById('guide-icon-container');
+      iconContainer.innerHTML = `<i data-lucide="${currentProject.icon}" class="w-7 h-7"></i>`;
+
+      // Render Safety List
+      const safetyUl = document.getElementById('guide-safety');
+      safetyUl.innerHTML = currentProject.safety.map(s => `
+        <li class="flex items-start space-x-2">
+          <i data-lucide="check-circle-2" class="w-4 h-4 text-amber-400 shrink-0 mt-0.5"></i>
+          <span>${s}</span>
+        </li>
+      `).join('');
+
+      // Render Materials Checklist
+      const materialsDiv = document.getElementById('guide-materials');
+      materialsDiv.innerHTML = currentProject.materials.map((m, idx) => `
+        <label class="flex items-center space-x-2.5 cursor-pointer select-none group">
+          <input type="checkbox" class="w-4 h-4 rounded border-brand-border bg-brand-surface text-emerald-500 focus:ring-emerald-500/30 accent-emerald-500">
+          <span class="group-hover:text-white transition-colors">${m}</span>
+        </label>
+      `).join('');
+
+      // Hide Completion Banner initially
+      document.getElementById('completion-banner').classList.add('hidden');
+
+      // Update Step Interface
+      updateStepUI();
+
+      // View Switching Transition
+      const catalogSection = document.getElementById('catalog-section');
+      const guideSection = document.getElementById('guide-section');
+
+      catalogSection.classList.remove('fade-in');
+      catalogSection.classList.add('fade-out');
+
+      setTimeout(() => {
+        catalogSection.classList.add('hidden');
+        guideSection.classList.remove('hidden');
+        
+        setTimeout(() => {
+          guideSection.classList.remove('fade-out');
+          guideSection.classList.add('fade-in');
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+          initLucide();
+        }, 50);
+      }, 300);
+    }
+
+    // Step Navigation Logic
+    function navigateStep(direction) {
+      if (!currentProject) return;
+
+      const newIndex = currentStepIndex + direction;
+      if (newIndex >= 0 && newIndex < currentProject.steps.length) {
+        currentStepIndex = newIndex;
+        updateStepUI();
+      } else if (newIndex >= currentProject.steps.length) {
+        // Complete Project
+        document.getElementById('completion-banner').classList.remove('hidden');
+        triggerConfetti();
+        document.getElementById('completion-banner').scrollIntoView({ behavior: 'smooth' });
+      }
+    }
+
+    function updateStepUI() {
+      const totalSteps = currentProject.steps.length;
+      const stepData = currentProject.steps[currentStepIndex];
+
+      // Counters & Percentage
+      const progressPercent = Math.round(((currentStepIndex + 1) / totalSteps) * 100);
+      document.getElementById('step-counter-text').innerText = `STEP ${currentStepIndex + 1} OF ${totalSteps}`;
+      document.getElementById('step-progress-percent').innerText = `${progressPercent}% COMPLETED`;
+      document.getElementById('progress-bar-fill').style.width = `${progressPercent}%`;
+
+      // Step Contents
+      document.getElementById('active-step-number').innerText = currentStepIndex + 1;
+      document.getElementById('active-step-title').innerText = stepData.title;
+      document.getElementById('active-step-instruction').innerText = stepData.instruction;
+
+      // Prev Button State
+      document.getElementById('prev-step-btn').disabled = currentStepIndex === 0;
+
+      // Next Button Labels
+      const nextBtnText = document.getElementById('next-btn-text');
+      const nextBtnIcon = document.getElementById('next-btn-icon');
+
+      if (currentStepIndex === totalSteps - 1) {
+        nextBtnText.innerText = 'Finish Project';
+        nextBtnIcon.setAttribute('data-lucide', 'check-circle');
+      } else {
+        nextBtnText.innerText = 'Next Step';
+        nextBtnIcon.setAttribute('data-lucide', 'chevron-right');
+      }
+
+      initLucide();
+    }
+
+    // Reset Back to Catalog
+    function resetToCatalog(e) {
+      if (e) e.preventDefault();
+
+      const catalogSection = document.getElementById('catalog-section');
+      const guideSection = document.getElementById('guide-section');
+
+      guideSection.classList.remove('fade-in');
+      guideSection.classList.add('fade-out');
+
+      setTimeout(() => {
+        guideSection.classList.add('hidden');
+        catalogSection.classList.remove('hidden');
+
+        setTimeout(() => {
+          catalogSection.classList.remove('fade-out');
+          catalogSection.classList.add('fade-in');
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        }, 50);
+      }, 300);
+    }
+
+    // ==========================================
+    // VISUAL FX 1: 3D CARD TILT & MOUSE SPOTLIGHT
+    // ==========================================
+    function setupCardInteractions() {
+      document.addEventListener('mousemove', (e) => {
+        const cards = document.querySelectorAll('.glass-card');
+        cards.forEach(card => {
+          const rect = card.getBoundingClientRect();
+          const x = e.clientX - rect.left;
+          const y = e.clientY - rect.top;
+
+          card.style.setProperty('--mouse-x', `${x}px`);
+          card.style.setProperty('--mouse-y', `${y}px`);
+        });
+      });
+    }
+
+    // ==========================================
+    // VISUAL FX 2: BUBBLE CANVAS (UP TO SIZE 7)
+    // ==========================================
+    let mouse = { x: null, y: null, radius: 120 };
+
+    function initBackgroundCanvas() {
+      const canvas = document.getElementById('bg-canvas');
+      const ctx = canvas.getContext('2d');
+
+      let width = canvas.width = window.innerWidth;
+      let height = canvas.height = window.innerHeight;
+
+      window.addEventListener('resize', () => {
+        width = canvas.width = window.innerWidth;
+        height = canvas.height = window.innerHeight;
+      });
+
+      window.addEventListener('mousemove', (e) => {
+        mouse.x = e.clientX;
+        mouse.y = e.clientY;
+      });
+
+      // Particle Generator with Bubble sizes up to 7
+      const particles = [];
+      const particleCount = 45;
+
+      for (let i = 0; i < particleCount; i++) {
+        particles.push({
+          x: Math.random() * width,
+          y: Math.random() * height,
+          // RADIUS: Size ranges from 2px up to 7px
+          radius: Math.random() * 5 + 2,
+          vx: (Math.random() - 0.5) * 0.6,
+          vy: (Math.random() - 0.5) * 0.6 - 0.2, // Subtle upward drift
+          alpha: Math.random() * 0.5 + 0.2,
+          color: Math.random() > 0.3 ? '#10b981' : '#34d399'
+        });
+      }
+
+      function animate() {
+        ctx.clearRect(0, 0, width, height);
+
+        particles.forEach(p => {
+          // Physics movement
+          p.x += p.vx;
+          p.y += p.vy;
+
+          // Screen Wrap
+          if (p.x < 0) p.x = width;
+          if (p.x > width) p.x = 0;
+          if (p.y < 0) p.y = height;
+          if (p.y > height) p.y = 0;
+
+          // Mouse Interaction / Repulsion
+          if (mouse.x !== null && mouse.y !== null) {
+            let dx = mouse.x - p.x;
+            let dy = mouse.y - p.y;
+            let distance = Math.sqrt(dx * dx + dy * dy);
+
+            if (distance < mouse.radius) {
+              let angle = Math.atan2(dy, dx);
+              let force = (mouse.radius - distance) / mouse.radius;
+              p.x -= Math.cos(angle) * force * 3;
+              p.y -= Math.sin(angle) * force * 3;
+            }
+          }
+
+          // Render Floating Bubbles
+          ctx.save();
+          ctx.globalAlpha = p.alpha;
+          ctx.fillStyle = p.color;
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+          ctx.fill();
+
+          // Subtle Outer Glow for Larger Bubbles
+          if (p.radius > 4) {
+            ctx.shadowBlur = 10;
+            ctx.shadowColor = '#10b981';
+          }
+          ctx.restore();
+        });
+
+        requestAnimationFrame(animate);
+      }
+
+      animate();
+    }
+
+    // ==========================================
+    // VISUAL FX 3: PROJECT CONFETTI BLAST
+    // ==========================================
+    function triggerConfetti() {
+      const canvas = document.getElementById('confetti-canvas');
+      const ctx = canvas.getContext('2d');
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+
+      const pieces = [];
+      const colors = ['#10b981', '#34d399', '#f59e0b', '#3b82f6', '#ecfdf5'];
+
+      for (let i = 0; i < 100; i++) {
+        pieces.push({
+          x: canvas.width / 2,
+          y: canvas.height / 2,
+          vx: (Math.random() - 0.5) * 16,
+          vy: (Math.random() - 0.7) * 16,
+          size: Math.random() * 8 + 4,
+          color: colors[Math.floor(Math.random() * colors.length)],
+          rotation: Math.random() * 360,
+          rotSpeed: (Math.random() - 0.5) * 10,
+          opacity: 1
+        });
+      }
+
+      let frame = 0;
+      function animateConfetti() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        let active = false;
+
+        pieces.forEach(p => {
+          if (p.opacity > 0) {
+            active = true;
+            p.x += p.vx;
+            p.y += p.vy;
+            p.vy += 0.3; // Gravity
+            p.rotation += p.rotSpeed;
+            p.opacity -= 0.012;
+
+            ctx.save();
+            ctx.translate(p.x, p.y);
+            ctx.rotate((p.rotation * Math.PI) / 180);
+            ctx.globalAlpha = Math.max(0, p.opacity);
+            ctx.fillStyle = p.color;
+            ctx.fillRect(-p.size / 2, -p.size / 2, p.size, p.size);
+            ctx.restore();
+          }
+        });
+
+        if (active && frame < 150) {
+          frame++;
+          requestAnimationFrame(animateConfetti);
+        } else {
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+        }
+      }
+
+      animateConfetti();
+    }
+  </script>
+</body>
+</html>
